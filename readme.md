@@ -7,3 +7,8 @@ llama is an LLM interface for conversational AI.
 ```bash
 python ns.py "llama infer -m <path/to/model>" --port 12345
 ```
+
+Try connecting on the other side:
+```bash
+nc 127.0.0.1 12345
+```
