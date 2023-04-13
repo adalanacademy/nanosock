@@ -10,6 +10,7 @@ from contextlib import closing
 parser = argparse.ArgumentParser(description="A socket server/client that runs a command and pipes input/output to the connected client.")
 parser.add_argument("command", nargs='?', help="The command to run, including arguments and flags.")
 parser.add_argument("--port", type=int, default=12345, help="The port number to bind the server to or connect to. (default: 12345)")
+parser.add_argument("--debug", type=bool, default=False, help="Print stdout of the subprocess")
 parser.add_argument("--connect", "-c", type=str, help="The address to connect as a client.")
 args = parser.parse_args()
 
@@ -46,6 +47,8 @@ def handle_client(client_socket, client_address):
             data = src.readline()
             if data:
                 #dst.sendall(data.encode('utf-8'))
+                if debug:
+                    print(data)
                 dst.sendall(encode_string_with_length(data))
             else:
                 break
@@ -86,6 +89,9 @@ def run_client(address, port):
             response = recv_msg(client_socket)
     finally:
         client_socket.close()
+
+# Sexy global var
+debug = args.debug
 
 if args.connect:
     run_client(args.connect, args.port)
