@@ -30,12 +30,13 @@ def encode_string_with_length(s: str) -> bytes:
     return length_binary + utf8_binary
 
 
+'''
 async def read_until_chars(reader, chars) -> str:
     #output = []
     output = ''
     while True:
         char = await reader.read(1)
-        print(f"{char.decode('utf-8')}")
+        #print(f"{char.decode('utf-8')}")
         #if not char:
         #    break
         output += char.decode('utf-8')
@@ -46,25 +47,17 @@ async def read_until_chars(reader, chars) -> str:
 '''
 
 async def read_until_chars(src, chars) -> str:
-    output = []
+    output = bytearray()
+    chars = chars.encode("utf-8")
     while True:
-        try:
-            # Use non-blocking reads with a short timeout
-            char = await asyncio.wait_for(src.read(1), timeout=0.1)
-        except asyncio.TimeoutError:
-            # If a timeout occurs, continue reading
-            continue
-        except Exception as e:
-            # In case of other exceptions, break the loop
-            print(f"Error while reading from subprocess: {e}")
+        byte = await src.read(1)
+        if not byte:
             break
-
-        output.append(char.decode())
-
-        if "".join(output[-len(chars):]) == chars:
+        output.extend(byte)
+        if output[-len(chars):] == chars:
             break
-    return "".join(output)
-'''
+    return output.decode("utf-8")
+
 
 async def recv_msg(reader) -> str:
     length_binary = await reader.read(4)
@@ -78,38 +71,36 @@ async def recv_msg(reader) -> str:
 # Function to handle communication with the client.
 async def handle_client(reader, writer):
     # Spawn the subprocess with the provided command.
-    '''
-    process = subprocess.Popen(
+    try:
+        process = await asyncio.create_subprocess_shell(
             args.command,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            shell=True, text=True)
-    '''
-    process = await asyncio.create_subprocess_shell(
-        args.command,
-        stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
-    )
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+    except Exception as e:
+        print(f'Failed to start subprocess: {e}')
 
     # Function to read from the process and send data to the client.
     async def forward(src, writer):
-        while True:
-            #data starting= src.readline()
-            print('reading chars from subprocess output..')
-            data = await read_until_chars(src, '&&&')
-            if data:
-                if debug:
-                    print(data)
-                #dst.sendall(encode_string_with_length(data))
-                print('bout to write to client')
-                writer.write(encode_string_with_length(data))
-                await writer.drain()
-                #print(f'wrote [{data}] to client')
-            else:
-                writer.close()
-                break
+        try:
+            while True:
+                #data starting= src.readline()
+                print('reading chars from subprocess output..')
+                data = await read_until_chars(src, '&&&')
+                if data:
+                    if debug:
+                        print(data)
+                    #dst.sendall(encode_string_with_length(data))
+                    print('bout to write to client')
+                    writer.write(encode_string_with_length(data))
+                    await writer.drain()
+                    #print(f'wrote [{data}] to client')
+                else:
+                    writer.close()
+                    break
+        except Exception as e:
+            print(f'Error in relaying stdout/err from subprocess to client: {e}')
 
     # Forward stdout and stderr of the subprocess to the client.
     stdout_task = asyncio.create_task(forward(process.stdout, writer))
@@ -117,14 +108,16 @@ async def handle_client(reader, writer):
 
     # Read from the client and send data to the subprocess.
     while True:
-        print('await client msg')
-        data = await recv_msg(reader)
-        print(f'recvd from client: {data}')
+        try:
+            data = await recv_msg(reader) + '\n'
+        except Exception as e:
+            print(f'Error while await message from client: {e}')
         if data:
-            #process.stdin.write(data)
-            #process.stdin.flush()
-            process.stdin.write(data)
-            await process.stdin.drain()
+            try:
+                process.stdin.write(data.encode('utf-8'))
+                await process.stdin.drain()
+            except Exception as e:
+                print(f'Error: {e}')
         else:
             break
 
@@ -139,7 +132,7 @@ def run_client(address, port):
 
     try:
         while True:
-            user_input = input() + '◊'
+            user_input = input() + '&&&'
             if not user_input:
                 break
 
@@ -176,4 +169,7 @@ async def main():
         #server_socket.listen(1)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f'Error: {e}')
